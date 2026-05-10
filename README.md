@@ -2,7 +2,7 @@
 
 **Author:** Shlok Rana  
 **Option:** A — Evaluate & Report  
-**Live findings:** https://ShlokRana.github.io/gates-fellowship-assignment/  
+**Live findings:** https://shlokrana.github.io/gates-fellowship-assignment/findings/  
 **Repository:** https://github.com/ShlokRana/gates-fellowship-assignment  
 **CeRAI fork used:** https://github.com/ShlokRana/AIEvaluationTool _(patched for macOS M1 — see below)_
 
@@ -227,7 +227,7 @@ This section is the key supporting document for the reviewer. All changes are in
 
 | Resource | Link |
 |---|---|
-| **Live report** | https://ShlokRana.github.io/gates-fellowship-assignment/ |
+| **Live report** | https://shlokrana.github.io/gates-fellowship-assignment/findings/ |
 | Report source (HTML) | [`findings/index.html`](findings/index.html) |
 | Report source (Markdown) | [`findings/index.md`](findings/index.md) |
 | Machine-readable scorecard | [`findings/results.json`](findings/results.json) |
