@@ -8,3 +8,6 @@ evaluation/reports/*
 !evaluation/reports/snapshot_*/
 .DS_Store
 node_modules/
+docs/
+AI Fellows India - Technical Assignment.pdf
+SUBMISSION_NOTES.md
