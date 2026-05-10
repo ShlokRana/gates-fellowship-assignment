@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Gates Foundation AI Fellowship FAQ Bot</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  #log { border: 1px solid #ccc; padding: 1rem; min-height: 320px; max-height: 60vh; overflow-y: auto; }
+  .msg { margin: 0.5rem 0; }
+  .user { color: #0a4; }
+  .bot { color: #03a; }
+  .sources { color: #888; font-size: 0.85em; margin-left: 1rem; }
+  form { display: flex; gap: 0.5rem; margin-top: 1rem; }
+  input[type=text] { flex: 1; padding: 0.5rem; }
+  button { padding: 0.5rem 1rem; }
+</style>
+</head>
+<body>
+<h2>Gates Foundation AI Fellowship FAQ Bot</h2>
+<p><small>Sanity-check UI. The real evaluation runs via CeRAI.</small></p>
+<div id="log"></div>
+<form id="f">
+  <input id="q" type="text" placeholder="Ask about the AI Fellowship program..." autofocus />
+  <button>Send</button>
+</form>
+<script>
+const sessionId = "ui-" + Math.random().toString(36).slice(2, 10);
+const log = document.getElementById("log");
+const f = document.getElementById("f");
+const q = document.getElementById("q");
+
+function append(role, text, sources) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = (role === "user" ? "You: " : "Bot: ") + text;
+  log.appendChild(div);
+  if (sources && sources.length) {
+    const s = document.createElement("div");
+    s.className = "sources";
+    s.textContent = "sources: " + sources.join(", ");
+    log.appendChild(s);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+f.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = q.value.trim();
+  if (!message) return;
+  append("user", message);
+  q.value = "";
+  try {
+    const r = await fetch("/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({session_id: sessionId, message}),
+    });
+    const body = await r.json();
+    append("bot", body.response, body.sources);
+  } catch (err) {
+    append("bot", "Error: " + err.message);
+  }
+});
+</script>
+</body>
+</html>
