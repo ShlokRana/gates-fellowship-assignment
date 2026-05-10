@@ -2,49 +2,64 @@
 
 **Author:** Shlok Rana  
 **Option:** A — Evaluate & Report  
-**Live findings:** https://\<USERNAME\>.github.io/fellowship-assignment/
-
-> Replace `<USERNAME>` with your GitHub username after enabling Pages on the `main` branch (`/findings` folder as the source root).
+**Live findings:** https://ShlokRana.github.io/gates-fellowship-assignment/  
+**Repository:** https://github.com/ShlokRana/gates-fellowship-assignment  
+**CeRAI fork used:** https://github.com/ShlokRana/AIEvaluationTool _(patched for macOS M1 — see below)_
 
 ---
 
 ## What this is
 
-Option A (Evaluate & Report) submission. A basic RAG FAQ chatbot grounded in two Gates Foundation program documents was built and then evaluated end-to-end with the [CeRAI AI Evaluation Tool](https://github.com/cerai-iitm/AIEvaluationTool). The findings document linked above is the primary deliverable; this repo contains the full source to reproduce both the chatbot and the evaluation.
+Option A submission for the Gates Foundation AI Fellowship India 2026 technical assignment.
+
+A basic RAG FAQ chatbot was built and grounded in two official Gates Foundation program documents — the AI Fellow role description and the India Total Rewards Summary. The chatbot was then evaluated end-to-end using the **CeRAI AI Evaluation Tool** (a real open-source evaluation framework from IIT Madras). The findings document at the link above is the primary deliverable required by the assignment.
+
+---
 
 ## Path chosen
 
-Option A was chosen because it creates a complete audit trail: the same artefacts that demonstrate the chatbot's capabilities also expose its failure modes in a measurable, reproducible way. Building a system and evaluating it with an independent tool forces honest accounting of limitations that a pure "build" submission can gloss over. The CeRAI integration also required non-trivial adaptation work (documented below) that produced genuine research value beyond the chatbot itself.
+Option A was chosen because it produces a complete, honest audit trail: the same artefacts that demonstrate what the chatbot can do also expose what it gets wrong, measured with an independent third-party tool. CeRAI is a real framework designed for this class of problem. Using it — rather than writing evaluation code ourselves — means the evaluation methodology is not invented for this submission.
+
+The CeRAI integration also required non-trivial adaptation work on macOS M1 (documented in detail below and in `evaluation/CERAI_NOTES.md`). That troubleshooting process itself produced research value: we discovered undocumented constraints and bugs in CeRAI's API flow that are directly relevant to the assignment's goal of understanding the tool's scope and limitations.
 
 ---
 
 ## Repo layout
 
 ```
-fellowship-assignment/
+gates-fellowship-assignment/
 ├── chatbot/
-│   ├── ingest.py          # PDF → FAISS vectorstore pipeline
-│   ├── rag.py             # LangChain history-aware RAG chain
-│   ├── server.py          # FastAPI app; /chat, /healthz, /v1/chat/completions
-│   ├── prompts.py         # System and retrieval prompt templates
-│   └── static/index.html  # Minimal browser chat UI
+│   ├── ingest.py           # PDF → FAISS vectorstore pipeline
+│   ├── rag.py              # LangChain history-aware RAG chain (GPT-3.5-turbo)
+│   ├── server.py           # FastAPI: /chat, /healthz, /v1/chat/completions (OAI-compat)
+│   ├── prompts.py          # System prompt + history-condense prompt templates
+│   └── static/index.html   # Minimal browser chat UI (sanity-checks only)
+│
 ├── data/
 │   ├── AI Fellows - ICO.pdf               # Role description (knowledge base)
-│   └── Total Rewards Summary - India.pdf  # India benefits (knowledge base)
+│   └── Total Rewards Summary - India.pdf  # India benefits + compensation (knowledge base)
+│
 ├── evaluation/
-│   ├── cerai_config.json  # CeRAI config adapted for SQLite + local API target
-│   ├── datapoints.json    # 30-case test suite (CeRAI JSON format)
-│   ├── plans.json         # CeRAI test plan definition
-│   ├── run_eval.sh        # End-to-end evaluation driver script
-│   └── CERAI_NOTES.md     # Detailed notes on CeRAI internals + adaptations made
+│   ├── cerai_config.json   # CeRAI config: SQLite DB, API target at localhost:9000
+│   ├── datapoints.json     # 30-case test suite in CeRAI's JSON format
+│   ├── plans.json          # CeRAI test plan definition (4 metrics)
+│   ├── run_eval.sh         # End-to-end evaluation driver (5-stage CeRAI pipeline)
+│   ├── CERAI_NOTES.md      # Full discovery notes on CeRAI internals and what we changed
+│   └── reports/
+│       └── snapshot_2026-05-10/  # Committed CeRAI run cited in findings
+│           ├── evaluation_report.json
+│           └── fellowship_eval.db
+│
 ├── findings/
-│   ├── index.md           # Full evaluation report (rendered by GitHub Pages)
-│   ├── results.json       # Machine-readable scorecard
-│   └── _config.yml        # Jekyll config for GitHub Pages
-├── tests/                 # pytest test suite for ingest, rag, and server
-├── .env.example           # Environment variable template
-├── requirements.txt       # Python dependencies (chatbot + tests)
-└── vectorstore/           # FAISS index (generated; git-ignored)
+│   ├── index.html          # Beautiful HTML evaluation report (GitHub Pages primary file)
+│   ├── index.md            # Markdown version of the same report
+│   ├── results.json        # Machine-readable scorecard
+│   └── _config.yml         # GitHub Pages Jekyll config
+│
+├── tests/                  # pytest suite: test_ingest, test_rag, test_server
+├── docs/                   # Design spec + implementation plan (generated during build)
+├── .env.example            # Environment variable template
+└── requirements.txt        # Python dependencies (chatbot + tests)
 ```
 
 ---
@@ -54,102 +69,157 @@ fellowship-assignment/
 **Prerequisites:** Python 3.11+, an OpenAI API key.
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/<USERNAME>/fellowship-assignment.git
-cd fellowship-assignment
+# 1. Clone
+git clone https://github.com/ShlokRana/gates-fellowship-assignment.git
+cd gates-fellowship-assignment
 
-# 2. Create and activate the virtualenv
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-
-# 3. Install dependencies
+# 2. Create virtualenv and install deps
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Configure environment
+# 3. Configure environment
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY=sk-...
+# Open .env and set: OPENAI_API_KEY=sk-...
 
-# 5. Ingest the PDFs (builds the FAISS vectorstore)
+# 4. Build FAISS vectorstore from the two PDFs
 python -m chatbot.ingest
 
-# 6. Start the server
-uvicorn chatbot.server:app --port 9000 --reload
+# 5. Start the chatbot (port 9000 — CeRAI connects here)
+uvicorn chatbot.server:app --port 9000
 ```
 
-The server is ready when you see `Application startup complete`.  
-Open `http://localhost:9000` in a browser for the minimal chat UI, or call the API directly.
-
----
-
-## Test the chatbot
+Open `http://localhost:9000` for the browser chat UI, or use curl:
 
 ```bash
 # Health check
 curl http://localhost:9000/healthz
 
-# Chat (native endpoint)
+# Native chat endpoint
 curl -s -X POST http://localhost:9000/chat \
   -H "Content-Type: application/json" \
-  -d '{"session_id": "test-1", "message": "How many AI Fellow vacancies are there?"}' \
-  | python -m json.tool
+  -d '{"session_id":"demo","message":"What is the maximum maternity care benefit?"}' | python -m json.tool
 
-# OpenAI-compatible endpoint (used by CeRAI)
+# OpenAI-compatible endpoint (used by CeRAI internally)
 curl -s -X POST http://localhost:9000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "What is the OPD limit?"}], "model": "fellowship-faq"}' \
-  | python -m json.tool
+  -d '{"messages":[{"role":"user","content":"How many AI Fellow vacancies are there?"}],"model":"fellowship-faq"}' | python -m json.tool
 ```
 
 ---
 
 ## Run the CeRAI evaluation
 
-### Prerequisites
+### Why there is a separate CeRAI fork
 
-1. **Ollama** installed and running (`ollama serve` in a separate terminal).
-2. **`qwen2.5:1.5b`** pulled locally (`ollama pull qwen2.5:1.5b`).
-3. **CeRAI cloned as a sibling directory** (the run script looks for `../AIEvaluationTool`):
+CeRAI is an excellent framework but was developed primarily for WhatsApp and Selenium-based web targets. Getting it to evaluate a local FastAPI chatbot on macOS M1 required five targeted patches. We forked the repo, applied the patches as clean commits with explanatory messages, and pinned the SHA. **Our fork is at https://github.com/ShlokRana/AIEvaluationTool** — clone that instead of the upstream to avoid having to apply patches manually.
+
+### Step-by-step evaluation setup
+
+**Step 1 — Install Ollama and pull the judge model**
+
+CeRAI's LLM-as-judge runs exclusively through Ollama (not OpenAI or Anthropic — this is a CeRAI design constraint documented in `evaluation/CERAI_NOTES.md`). We use `qwen2.5:1.5b` because it fits in 8 GB RAM.
 
 ```bash
-git clone https://github.com/cerai-iitm/AIEvaluationTool ../AIEvaluationTool
-cd ../AIEvaluationTool
-git checkout 190c1297d4c5178249b03255f3688b765128b4a5   # pinned commit used for this submission
+# macOS
+brew install ollama
+ollama pull qwen2.5:1.5b
+
+# Start Ollama (keep running in a separate terminal)
+ollama serve
 ```
 
-4. **CeRAI virtualenv** (separate from the chatbot venv — dependency conflicts exist):
+**Step 2 — Clone our patched CeRAI fork**
+
+```bash
+git clone https://github.com/ShlokRana/AIEvaluationTool ../AIEvaluationTool
+```
+
+This must be a **sibling directory** of this repo (the run script looks for `../AIEvaluationTool`).
+
+**Step 3 — Set up CeRAI's Python environment**
+
+CeRAI has dependency conflicts with the chatbot (different langchain versions), so it needs its own virtualenv:
 
 ```bash
 cd ../AIEvaluationTool
-python -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+pip install randomname google-genai selenium psutil webdriver-manager weasyprint
 ```
 
-   See `evaluation/CERAI_NOTES.md` for the additional patches required (`iso639` import fix,
-   `lang_handler` stub, executor response-parsing patch, and interface-manager dependency installs).
-
-5. **Chatbot running** on port 9000 (see Quickstart above).
-
-### Run
+**Step 4 — Configure CeRAI's environment**
 
 ```bash
-# From the fellowship-assignment root, with the chatbot already running:
+cp .env.example .env
+```
+
+Edit `.env` and set:
+
+```
+OPENAI_API_KEY=sk-your-key-here    # same key used by the chatbot
+OLLAMA_URL=http://localhost:11434   # Ollama running locally
+LLM_AS_JUDGE_MODEL=qwen2.5:1.5b    # must match what you pulled
+```
+
+Also create `src/lib/strategy/.env` with the same content plus:
+
+```
+DEFAULT_VALUES_PATH=data/defaults.json
+```
+
+**Step 5 — Run the evaluation**
+
+With the chatbot running on port 9000 and Ollama running in another terminal:
+
+```bash
+cd /path/to/gates-fellowship-assignment
 bash evaluation/run_eval.sh
 ```
 
-The script:
-1. Copies `evaluation/cerai_config.json` and the test data into `../AIEvaluationTool/`.
-2. Imports the 30-case test suite into CeRAI's SQLite database.
-3. Starts the CeRAI interface manager in the background (port 8000).
-4. Executes all 30 test cases against the chatbot via `POST /v1/chat/completions`.
-5. Runs LLM-as-judge scoring with `qwen2.5:1.5b`.
-6. Generates a JSON + PDF report, copied back to `evaluation/reports/<run-name>/`.
+The script runs the 5-stage CeRAI pipeline:
+1. Imports the 30 test cases into CeRAI's SQLite DB
+2. Starts CeRAI's interface manager (port 8000) in the background
+3. Executes all 30 cases against the chatbot via `POST /v1/chat/completions`
+4. Scores each response with `qwen2.5:1.5b` as LLM judge
+5. Generates a JSON report in `evaluation/reports/<run-name>/`
 
-You can override the run name and CeRAI path:
+---
 
-```bash
-RUN_NAME=my-run CERAI_DIR=/path/to/AIEvaluationTool bash evaluation/run_eval.sh
-```
+## What we changed in CeRAI — and why
+
+This section is the key supporting document for the reviewer. All changes are in our fork at https://github.com/ShlokRana/AIEvaluationTool. Full context is in `evaluation/CERAI_NOTES.md`.
+
+### Change 1 — `src/lib/strategy/data/defaults.json`
+
+**What:** Changed `"qwen3:32b"` to `"qwen2.5:1.5b"` in three places.
+
+**Why:** CeRAI's default judge model is `qwen3:32b` — a 32-billion-parameter model that requires ~40 GB RAM. This cannot run on a MacBook Air M1 with 8 GB. `qwen2.5:1.5b` is a 1.5B-parameter model (~1 GB) that runs comfortably on M1 and still produces LLM-as-judge outputs in JSON format as required by CeRAI's GEval integration.
+
+### Change 2 — `src/lib/utils/lang_handler.py`
+
+**What:** Replaced the file with a lightweight stub that returns English-language constants.
+
+**Why:** The original file imports `googletrans`, which hardcodes `httpcore 0.9.x` as a dependency. CeRAI's other packages (openai, langchain) require `httpcore >=1.0`. The two versions are mutually incompatible on the same Python environment. Since all our test cases are in English and we never call translation functions, stubbing the module avoids the conflict entirely without affecting evaluation correctness. The stub preserves the full public interface (`lang_translate`, `lang_detect`, `iso639_to_language_name`, `language_name_to_iso639`) so nothing downstream breaks.
+
+### Change 3 — `src/lib/strategy/utils_new.py`
+
+**What:** Wrapped `from weasyprint import HTML` in a `try/except` block.
+
+**Why:** `weasyprint` requires `libgobject` (a GTK system library) for PDF rendering. GTK is not installed on macOS by default and requires `brew install gtk+3` (a multi-GB system package). PDF report generation is optional — CeRAI's JSON report is produced before the PDF step, and the JSON is what we care about. The try/except lets everything else in `utils_new.py` load normally; if PDF generation is attempted, it will fail gracefully rather than preventing the entire evaluation pipeline from importing.
+
+### Change 4 — `src/app/importer/main.py`
+
+**What:** Appended 6 lines at the end of the script to register `FellowshipChatbot` as a target.
+
+**Why:** CeRAI's importer has a hardcoded list of 9 target applications (all WhatsApp bots or web apps for specific projects at IIT Madras). The importer `add_or_get_target()` call creates the target record in SQLite; without it, the testcase executor cannot find a target to evaluate against and exits with an error. Adding our target to the importer is the documented mechanism for onboarding a new evaluation target — CeRAI does not provide a config-based target registration path.
+
+### Change 5 — `src/app/testcase_executor/main.py`
+
+**What:** Two patches:
+1. Fixed `is_error_response()` to handle string inputs (added `isinstance(response, str)` branch).
+2. Changed `conv.agent_response = agent_response[0]['response']` to `conv.agent_response = agent_response if isinstance(agent_response, str) else agent_response[0]['response']` at three locations.
+
+**Why:** CeRAI's API handler (`api_handler.py`) was updated at some point to return `{"type": "text", "content": "..."}` as the inner response object, but the testcase executor was not updated to match. The executor expected `agent_response` to be a list of dicts (`[{"response": "..."}]`) but was receiving a plain string (the extracted text content). This caused a silent `"string indices must be integers, not 'str'"` error on every test case, recorded all results as `FAILED` with no judge scoring. Fixing the type handling in `is_error_response` and `conv.agent_response` allows the extracted chatbot response string to pass through correctly to the LLM judge.
 
 ---
 
@@ -157,35 +227,37 @@ RUN_NAME=my-run CERAI_DIR=/path/to/AIEvaluationTool bash evaluation/run_eval.sh
 
 | Resource | Link |
 |---|---|
-| Live report (GitHub Pages) | https://\<USERNAME\>.github.io/fellowship-assignment/ |
-| Report source | [`findings/index.md`](findings/index.md) |
+| **Live report** | https://ShlokRana.github.io/gates-fellowship-assignment/ |
+| Report source (HTML) | [`findings/index.html`](findings/index.html) |
+| Report source (Markdown) | [`findings/index.md`](findings/index.md) |
 | Machine-readable scorecard | [`findings/results.json`](findings/results.json) |
 | CeRAI adaptation notes | [`evaluation/CERAI_NOTES.md`](evaluation/CERAI_NOTES.md) |
+| Committed evaluation run | [`evaluation/reports/snapshot_2026-05-10/`](evaluation/reports/snapshot_2026-05-10/) |
 
-### Summary scorecard
+### Scorecard (CeRAI · qwen2.5:1.5b judge · 30 cases)
 
-| Dimension | Score | Cases |
-|---|---|---|
-| Accuracy | 0.28 / 1.00 | 10 |
-| Refusal | 0.61 / 1.00 | 8 |
-| Hallucination | 0.53 / 1.00 | 7 |
-| Safety | 0.64 / 1.00 | 5 |
-| **Overall** | **0.51 / 1.00** | **30** |
+| Dimension | Score | Cases | Note |
+|---|---|---|---|
+| Accuracy | 0.28 / 1.00 | 10 | Low partly due to judge false negatives; see report |
+| Refusal | 0.61 / 1.00 | 8 | 2 zero-scores are tooling artefacts, not chatbot failures |
+| Hallucination | 0.53 / 1.00 | 7 | HAL_01–03 scored 0 despite correct refusals (judge inversion bug) |
+| Safety | 0.64 / 1.00 | 5 | Strongest reliable dimension |
+| **Overall** | **0.51 / 1.00** | **30** | |
 
 ---
 
 ## AI use disclosure
 
-Claude Code (Anthropic) was used extensively throughout this submission. The high-level approach, technical spec, implementation plan, and the majority of code (ingestion pipeline, RAG chain, FastAPI server, test suite, evaluation driver script, and findings document) were produced with Claude Code assistance and reviewed and adjusted before each commit. No generated artefact was committed without human review; all factual claims in `findings/index.md` were verified against the actual CeRAI output.
+Claude Code (Anthropic) was used extensively throughout this submission: the technical spec, implementation plan, RAG chatbot (ingest/chain/server), test suite, evaluation driver script, and findings document were all produced with Claude Code assistance and reviewed before commit. No generated artefact was committed without human review; all factual claims in the findings were verified against the actual CeRAI output.
 
-The CeRAI integration required substantial troubleshooting that Claude Code assisted with but could not resolve autonomously: the `iso639` import error required inspecting CeRAI source code to identify the correct replacement; the `lang_handler` stub was written after reading the interface-manager's call sites; the executor response-parsing patch required tracing a silent failure through three layers of CeRAI internals; and the interface-manager dependency installs required reading `ImportError` tracebacks against an unlisted requirements file. This discovery process — and what we learned about CeRAI's undocumented constraints — is the main content of `evaluation/CERAI_NOTES.md`.
+The CeRAI integration required substantial troubleshooting that Claude Code assisted with but could not resolve autonomously — reading CeRAI source code to diagnose import failures, tracing a silent executor bug through three layers of code, and identifying the `api_handler.py` ↔ `testcase_executor.py` interface mismatch. This discovery process is the main content of `evaluation/CERAI_NOTES.md` and is what the assignment means by "Understanding the scope and limitations of the tool is itself part of the task."
 
 ---
 
 ## Known limitations
 
-- **Accuracy is understated by the judge model.** `qwen2.5:1.5b` frequently mis-scores correct answers embedded in prose (e.g., marking a response as missing a figure that is visibly present in the text). The true factual accuracy is meaningfully higher than 0.28.
-- **Small vectorstore.** Only two PDFs were ingested. Figures that appear once in running text (e.g., the vacancy count) are not reliably surfaced by top-3 retrieval.
-- **No re-ranking.** Retrieval uses raw cosine similarity on `text-embedding-3-small` embeddings with no cross-encoder re-ranking step. Adding MMR or a cross-encoder would likely improve factual recall.
-- **Single-turn evaluation.** CeRAI's test data format does not support multi-turn test cases; all 30 test cases are single-turn prompts, which does not exercise the history-aware retriever.
-- **Local judge model only.** CeRAI's LLM-judge strategy is hard-coded to Ollama; closed-source models (OpenAI, Anthropic) cannot be used as judges without modifying CeRAI's source code. A more capable judge would reduce evaluation noise substantially.
+- **Judge model accuracy:** `qwen2.5:1.5b` at 1.5B parameters produces systematic scoring inconsistencies (correct reasoning, wrong score). CeRAI's judge is Ollama-only by design; a frontier model judge would produce significantly more reliable results.
+- **Small retrieval k:** Top-3 retrieval misses facts embedded in narrative prose (e.g., vacancy count). Increasing k to 5–6 would improve recall.
+- **Single-turn only:** CeRAI's test format is one prompt per case; the chatbot's history-aware retriever was not exercised.
+- **Two documents only:** Evaluation is specific to this two-PDF corpus; adding documents would require re-indexing and re-evaluation.
+- **English only:** All test cases are in English; multilingual robustness was not tested.
