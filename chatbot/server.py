@@ -1,4 +1,6 @@
 """FastAPI app exposing the RAG chatbot."""
+import time
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -6,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from typing import Any
 
 from chatbot.rag import build_chain
 
@@ -74,6 +77,42 @@ def chat(req: ChatRequest):
         response=result["answer"],
         sources=sources,
     )
+
+
+class OAIMessage(BaseModel):
+    role: str
+    content: str
+
+class OAIRequest(BaseModel):
+    messages: list[OAIMessage]
+    model: str = "fellowship-faq"
+    temperature: float = 0
+    stream: bool = False
+
+@app.post("/v1/chat/completions")
+def oai_chat(req: OAIRequest):
+    """OpenAI-compatible endpoint so CeRAI's LOCAL provider can call us."""
+    user_msg = next(
+        (m.content for m in reversed(req.messages) if m.role == "user"), ""
+    )
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="No user message found")
+
+    chain = _get_chain()
+    session_id = str(uuid.uuid4())
+    result = chain.invoke(
+        {"input": user_msg},
+        config={"configurable": {"session_id": session_id}},
+    )
+    answer = result["answer"]
+    return {
+        "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": req.model,
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": answer}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+    }
 
 
 if STATIC_DIR.exists():

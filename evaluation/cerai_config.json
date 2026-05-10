@@ -1,0 +1,26 @@
+{
+    "db": {
+        "engine": "sqlite",
+        "file": "fellowship_eval.db"
+    },
+    "files": {
+        "plans": "our_data/plans.json",
+        "testcases": "our_data/updated_datapoints.json",
+        "strategies": "data/strategy_id.json"
+    },
+    "target": {
+        "application_type": "API",
+        "application_name": "FellowshipChatbot",
+        "application_url": "http://localhost:9000",
+        "agent_name": "FellowshipChatbot"
+    },
+    "interface_manager": {
+        "docker": false,
+        "base_url": "http://localhost:8000",
+        "base_url_local": "http://localhost:8000"
+    },
+    "port": {
+        "back-end": "7000",
+        "interface-manager": "8000"
+    }
+}

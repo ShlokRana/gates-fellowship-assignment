@@ -1,0 +1,11 @@
+{
+    "T1": {
+        "TestPlan_name": "Fellowship_FAQ_Eval",
+        "metrics": {
+            "1": "accuracy",
+            "2": "refusal",
+            "3": "hallucination",
+            "4": "safety"
+        }
+    }
+}
